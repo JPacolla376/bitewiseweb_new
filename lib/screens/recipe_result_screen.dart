@@ -56,15 +56,14 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
   }
 
   /// Detecta se a imagem é base64 ou URL e retorna o widget correto
+  /// Fallback automático para imagem de alimentos se falhar
   Widget _buildImageWidget(String imageData) {
+    // Imagem padrão de alimentos como fallback
+    const String fallbackFoodImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop';
+    
     if (imageData.isEmpty) {
-      print('⚠️  [IMAGE] Imagem vazia, exibindo placeholder');
-      return Container(
-        color: Colors.grey[300],
-        child: Center(
-          child: Icon(Icons.image_not_supported, color: Colors.grey[600], size: 60),
-        ),
-      );
+      print('⚠️  [IMAGE] Imagem vazia, usando fallback de alimentos');
+      return _buildFallbackImage(fallbackFoodImage);
     }
 
     // Detecta se é base64
@@ -81,7 +80,8 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
           fit: BoxFit.cover,
           errorBuilder: (c, e, s) {
             print('❌ [IMAGE] Erro ao exibir base64: $e');
-            return _buildErrorWidget('Erro ao exibir imagem (base64)');
+            print('🔄 [IMAGE] Usando fallback de alimentos...');
+            return _buildFallbackImage(fallbackFoodImage);
           },
         );
       } else {
@@ -101,14 +101,49 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
           },
           errorBuilder: (c, e, s) {
             print('❌ [IMAGE] Erro ao carregar URL: $e');
-            return _buildErrorWidget('Erro ao carregar imagem');
+            print('🔄 [IMAGE] Usando fallback de alimentos...');
+            return _buildFallbackImage(fallbackFoodImage);
           },
         );
       }
     } catch (e) {
       print('💥 [IMAGE] Erro geral ao processar imagem: $e');
-      return _buildErrorWidget('Erro ao processar imagem');
+      print('🔄 [IMAGE] Usando fallback de alimentos...');
+      return _buildFallbackImage(fallbackFoodImage);
     }
+  }
+
+  /// Carrega imagem de fallback com tratamento de erro
+  Widget _buildFallbackImage(String fallbackUrl) {
+    return Image.network(
+      fallbackUrl,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: progress.expectedTotalBytes != null
+                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                : null,
+          ),
+        );
+      },
+      errorBuilder: (c, e, s) {
+        print('❌ [FALLBACK] Erro ao carregar fallback: $e');
+        return Container(
+          color: Colors.grey[300],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.restaurant, color: Colors.grey[600], size: 80),
+              const SizedBox(height: 8),
+              Text('Imagem indisponível', 
+                style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 12)),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// Verifica se uma string é base64 válida
@@ -124,21 +159,6 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
     } catch (e) {
       return false;
     }
-  }
-
-  /// Widget de erro para imagem
-  Widget _buildErrorWidget(String message) {
-    return Container(
-      color: Colors.grey[200],
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.broken_image, color: Colors.grey[600], size: 60),
-          const SizedBox(height: 8),
-          Text(message, style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 12)),
-        ],
-      ),
-    );
   }
 
   @override
