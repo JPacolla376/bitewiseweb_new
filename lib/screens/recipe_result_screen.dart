@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:convert';
 import '../theme.dart';
 import '../global_state.dart';
 import 'login_modal.dart';
@@ -24,13 +25,15 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
   bool isSaved = false;
 
   /// Normaliza os dados da receita, preenchendo campos faltantes com valores padrão
+  /// A imagem é OBRIGATÓRIA e vem da API (base64 ou URL) - SEM fallback
   Map<String, dynamic> _normalizeRecipe(Map<String, dynamic> data) {
     print('🔧 [NORMALIZE] Normalizando dados da receita...');
+    print('📸 [NORMALIZE] Imagem recebida: ${data['image'] != null ? 'SIM' : 'NÃO'}');
     
     return {
       "id": data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
       "title": (data['title'] ?? 'Receita sem título').toString(),
-      "image": (data['image'] ?? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop').toString(),
+      "image": (data['image'] ?? '').toString(), // OBRIGATÓRIO - sem fallback de imagem fake
       "prep_time": (data['prep_time'] ?? '30 min').toString(),
       "servings": (data['servings'] ?? '4 pessoas').toString(),
       "difficulty": (data['difficulty'] ?? 'Média').toString(),
@@ -50,6 +53,92 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
       return data.map((item) => item?.toString() ?? '').where((s) => s.isNotEmpty).toList();
     }
     return [];
+  }
+
+  /// Detecta se a imagem é base64 ou URL e retorna o widget correto
+  Widget _buildImageWidget(String imageData) {
+    if (imageData.isEmpty) {
+      print('⚠️  [IMAGE] Imagem vazia, exibindo placeholder');
+      return Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Icon(Icons.image_not_supported, color: Colors.grey[600], size: 60),
+        ),
+      );
+    }
+
+    // Detecta se é base64
+    final isBase64 = _isBase64(imageData);
+    print('🖼️  [IMAGE] Tipo detectado: ${isBase64 ? 'BASE64' : 'URL'}');
+
+    try {
+      if (isBase64) {
+        print('📦 [IMAGE] Decodificando base64...');
+        final imageBytes = base64Decode(imageData);
+        print('✅ [IMAGE] Base64 decodificado com sucesso (${imageBytes.length} bytes)');
+        return Image.memory(
+          imageBytes,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) {
+            print('❌ [IMAGE] Erro ao exibir base64: $e');
+            return _buildErrorWidget('Erro ao exibir imagem (base64)');
+          },
+        );
+      } else {
+        print('🌐 [IMAGE] Carregando imagem da URL...');
+        return Image.network(
+          imageData,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: progress.expectedTotalBytes != null
+                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+          errorBuilder: (c, e, s) {
+            print('❌ [IMAGE] Erro ao carregar URL: $e');
+            return _buildErrorWidget('Erro ao carregar imagem');
+          },
+        );
+      }
+    } catch (e) {
+      print('💥 [IMAGE] Erro geral ao processar imagem: $e');
+      return _buildErrorWidget('Erro ao processar imagem');
+    }
+  }
+
+  /// Verifica se uma string é base64 válida
+  bool _isBase64(String str) {
+    try {
+      // Base64 válido contém apenas caracteres base64
+      final isValidBase64Chars = RegExp(r'^[A-Za-z0-9+/]*={0,2}$').hasMatch(str);
+      if (!isValidBase64Chars) return false;
+
+      // Tenta decodificar
+      base64Decode(str);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Widget de erro para imagem
+  Widget _buildErrorWidget(String message) {
+    return Container(
+      color: Colors.grey[200],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.broken_image, color: Colors.grey[600], size: 60),
+          const SizedBox(height: 8),
+          Text(message, style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 12)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -188,7 +277,7 @@ class _RecipeResultScreenState extends State<RecipeResultScreen> {
             expandedHeight: 300.0, pinned: true, backgroundColor: AppColors.terracotta,
             leading: Container(margin: const EdgeInsets.all(8), decoration: BoxDecoration(color: cs.surface.withOpacity(0.8), shape: BoxShape.circle), child: IconButton(icon: Icon(Icons.arrow_back, color: cs.onSurface), onPressed: () => Navigator.pop(context))),
             actions: [ if (!isSaved) Container(margin: const EdgeInsets.all(8), decoration: BoxDecoration(color: cs.surface.withOpacity(0.8), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.bookmark_add_outlined, color: AppColors.terracotta), onPressed: _handleSave)) ],
-            flexibleSpace: FlexibleSpaceBar(background: Image.network(recipe['image'], fit: BoxFit.cover, errorBuilder: (c,e,s) => Container(color: AppColors.coffee, child: const Center(child: Icon(Icons.restaurant, color: Colors.white, size: 50))))),
+            flexibleSpace: FlexibleSpaceBar(background: _buildImageWidget(recipe['image'])),
           ),
           SliverToBoxAdapter(
             child: Container(
