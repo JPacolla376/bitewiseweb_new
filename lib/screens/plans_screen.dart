@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
-import '../../main.dart';
-import '../../global_state.dart';
+import '../global_state.dart';
 import '../theme.dart';
 
 class PlansScreen extends StatelessWidget {

@@ -22,16 +22,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
 
-    return ValueListenableBuilder<bool>(
+    return ValueListenableBuilder<UserAuth>(
       valueListenable: authNotifier,
-      builder: (context, isLoggedIn, child) {
+      builder: (context, auth, child) {
+        final isLoggedIn = auth.isAuthenticated;
 
         final List<Widget> tabs = [
           const CreateTab(),
           isLoggedIn ? const SavedTab() : const ProfilePlaceholder(),
           isLoggedIn
-              ? ProfileTab(onLogout: () {
-            authNotifier.logout();
+              ? ProfileTab(onLogout: () async {
+            await authNotifier.logout();
             planNotifier.cancel();
             savedRecipesNotifier.value = [];
             tabNotifier.goToCreate();

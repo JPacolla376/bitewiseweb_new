@@ -48,9 +48,10 @@ class NotificationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return ValueListenableBuilder<bool>(
+    return ValueListenableBuilder<UserAuth>(
         valueListenable: authNotifier,
-        builder: (context, isLoggedIn, _) {
+        builder: (context, auth, _) {
+          final isLoggedIn = auth.isAuthenticated;
           return Container(
             height: MediaQuery.of(context).size.height * 0.75, // Altura fixa confortável
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),

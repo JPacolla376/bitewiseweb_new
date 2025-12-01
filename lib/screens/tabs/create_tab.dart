@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import '../../theme.dart';
-import '../../main.dart';
 import '../../global_state.dart';
+import '../../services/api_service.dart';
 import '../recipe_result_screen.dart';
 import '../plans_screen.dart';
-import '../about_modal.dart';
 
 class CreateTab extends StatefulWidget {
   const CreateTab({super.key});
@@ -102,6 +101,22 @@ class _CreateTabState extends State<CreateTab> {
   void _removeIngredient(String ingredient) => setState(() => _ingredients.remove(ingredient));
 
   Future<void> _generateRecipe(String selectedAI, Set<String> diets) async {
+    // Verifica autenticação
+    if (!authNotifier.value.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Faça login para gerar receitas',
+            style: GoogleFonts.poppins(color: Colors.white),
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Mostra loading
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -112,8 +127,7 @@ class _CreateTabState extends State<CreateTab> {
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(24)
-          ),
+              borderRadius: BorderRadius.circular(24)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -121,24 +135,94 @@ class _CreateTabState extends State<CreateTab> {
                 height: 150,
                 child: Lottie.network(
                   'https://lottie.host/d52ad3b9-6b2d-4d46-8211-e2a2a61189a0/6LNQtfLEkA.json',
-                  errorBuilder: (c, e, s) => Icon(Icons.soup_kitchen, size: 80, color: AppColors.terracotta),
+                  errorBuilder: (c, e, s) => Icon(Icons.soup_kitchen,
+                      size: 80, color: AppColors.terracotta),
                 ),
               ),
               const SizedBox(height: 16),
-              Text("Chef $selectedAI cozinhando...", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text("Chef $selectedAI cozinhando...",
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 8),
               if (diets.isNotEmpty)
-                Text("Considerando: ${diets.join(', ')}", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: AppColors.terracotta, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text("Considerando: ${diets.join(', ')}",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                        color: AppColors.terracotta,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold)),
             ],
           ),
         ),
       ),
     );
 
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
-      Navigator.pop(context);
-      Navigator.push(context, MaterialPageRoute(builder: (context) => RecipeResultScreen(userIngredients: _ingredients)));
+    try {
+      // Mapeia o nome da IA para o código esperado pelo backend
+      // Cada modelo é enviado com seu código específico:
+      // - 'OpenAI' → 'gpt' (ChatGPT)
+      // - 'Gemini' → 'gemini' (Google Gemini)
+      // - 'Llama' → 'gemini' (por enquanto usa Gemini)
+      String aiModel;
+      if (selectedAI.toLowerCase() == 'openai') {
+        aiModel = 'gpt';
+      } else if (selectedAI.toLowerCase() == 'gemini') {
+        aiModel = 'gemini';
+      } else if (selectedAI.toLowerCase() == 'llama') {
+        aiModel = 'gemini'; // Por enquanto, usa gemini para Llama
+      } else {
+        aiModel = 'gemini'; // Default
+      }
+
+      print('🤖 [CREATE_TAB] IA selecionada: $selectedAI');
+      print('🎯 [CREATE_TAB] Modelo enviado: $aiModel');
+      print('📋 [CREATE_TAB] Ingredientes: $_ingredients');
+
+      // O token JWT é enviado automaticamente pelo interceptador do Dio
+      // (recuperado do FlutterSecureStorage no método getToken())
+      final response = await apiService.generateRecipe(
+        ingredients: _ingredients,
+        aiModel: aiModel,
+      );
+
+      print('✅ [CREATE_TAB] Resposta recebida da API');
+      print('📊 [CREATE_TAB] Tipo de resposta: ${response.runtimeType}');
+      print('📦 [CREATE_TAB] Resposta completa: $response');
+      print('🔑 [CREATE_TAB] Chaves da resposta: ${response.keys.toList()}');
+
+      if (!mounted) return;
+      Navigator.pop(context); // Fecha loading
+
+      // Navega para a tela de resultado com os dados da IA
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RecipeResultScreen(
+            userIngredients: _ingredients,
+            recipeData: response,
+          ),
+        ),
+      );
+    } catch (e, stackTrace) {
+      print('❌ [CREATE_TAB] Erro ao gerar receita');
+      print('💥 [CREATE_TAB] Tipo de erro: ${e.runtimeType}');
+      print('⚠️  [CREATE_TAB] Mensagem: ${e.toString()}');
+      print('📍 [CREATE_TAB] Stack trace: $stackTrace');
+      
+      if (!mounted) return;
+      Navigator.pop(context); // Fecha loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erro ao gerar receita: ${e.toString()}',
+            style: GoogleFonts.poppins(color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 

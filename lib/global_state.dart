@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/api_service.dart';
 
 // --- 1. TEMA ---
 class ThemeNotifier extends ValueNotifier<ThemeMode> {
@@ -7,12 +8,109 @@ class ThemeNotifier extends ValueNotifier<ThemeMode> {
 }
 final themeNotifier = ThemeNotifier();
 
-// --- 2. AUTENTICAÇÃO ---
-class AuthNotifier extends ValueNotifier<bool> {
-  AuthNotifier() : super(false);
-  void login() => value = true;
-  void logout() => value = false;
+// --- 2. AUTENTICAÇÃO COM JWT ---
+class UserAuth {
+  final bool isAuthenticated;
+  final String? email;
+  final String? token;
+  final bool isLoading;
+  final String? error;
+
+  UserAuth({
+    this.isAuthenticated = false,
+    this.email,
+    this.token,
+    this.isLoading = false,
+    this.error,
+  });
+
+  UserAuth copyWith({
+    bool? isAuthenticated,
+    String? email,
+    String? token,
+    bool? isLoading,
+    String? error,
+  }) {
+    return UserAuth(
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      email: email ?? this.email,
+      token: token ?? this.token,
+      isLoading: isLoading ?? this.isLoading,
+      error: error ?? this.error,
+    );
+  }
 }
+
+class AuthNotifier extends ValueNotifier<UserAuth> {
+  AuthNotifier() : super(UserAuth()) {
+    _initializeAuth();
+  }
+
+  /// Inicializa a autenticação verificando token armazenado
+  Future<void> _initializeAuth() async {
+    try {
+      final isAuth = await apiService.isAuthenticated();
+      if (isAuth) {
+        final email = await apiService.getUserEmail();
+        final token = await apiService.getToken();
+        value = value.copyWith(
+          isAuthenticated: true,
+          email: email,
+          token: token,
+        );
+      }
+    } catch (e) {
+      // Token inválido, limpa a autenticação
+      await apiService.logout();
+    }
+  }
+
+  /// Faz registro de novo usuário
+  Future<void> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    value = value.copyWith(isLoading: true, error: null);
+    try {
+      await apiService.register(
+        name: name,
+        email: email,
+        password: password,
+      );
+      value = value.copyWith(isLoading: false);
+    } catch (e) {
+      value = value.copyWith(isLoading: false, error: e.toString());
+      rethrow;
+    }
+  }
+
+  /// Faz login
+  Future<void> login({required String email, required String password}) async {
+    value = value.copyWith(isLoading: true, error: null);
+    try {
+      final response = await apiService.login(email: email, password: password);
+      final token = response['token'] ?? response['accessToken'];
+      
+      value = value.copyWith(
+        isAuthenticated: true,
+        email: email,
+        token: token,
+        isLoading: false,
+      );
+    } catch (e) {
+      value = value.copyWith(isLoading: false, error: e.toString());
+      rethrow;
+    }
+  }
+
+  /// Faz logout
+  Future<void> logout() async {
+    await apiService.logout();
+    value = UserAuth();
+  }
+}
+
 final authNotifier = AuthNotifier();
 
 // --- 3. PLANOS ---
